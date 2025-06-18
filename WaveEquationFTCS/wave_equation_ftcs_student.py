@@ -5,64 +5,63 @@
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 def u_t(x, C=1, d=0.1, sigma=0.3, L=1):
     """
     计算初始速度剖面 psi(x)。
-
-    参数:
-        x (np.ndarray): 位置数组。
-        C (float): 振幅常数。
-        d (float): 指数项的偏移量。
-        sigma (float): 指数项的宽度。
-        L (float): 弦的长度。
-    返回:
-        np.ndarray: 初始速度剖面。
     """
-    # TODO: 实现初始速度剖面函数
-    raise NotImplementedError(f"请在 {__file__} 中实现此函数")
+    # 高斯型初始速度分布，中心在d，宽度为sigma
+    return C * np.exp(-((x - d * L) ** 2) / (2 * sigma ** 2))
 
 def solve_wave_equation_ftcs(parameters):
     """
     使用FTCS有限差分法求解一维波动方程。
-    
-    参数:
-        parameters (dict): 包含以下参数的字典：
-            - 'a': 波速 (m/s)。
-            - 'L': 弦的长度 (m)。
-            - 'd': 初始速度剖面的偏移量 (m)。
-            - 'C': 初始速度剖面的振幅常数 (m/s)。
-            - 'sigma': 初始速度剖面的宽度 (m)。
-            - 'dx': 空间步长 (m)。
-            - 'dt': 时间步长 (s)。
-            - 'total_time': 总模拟时间 (s)。
-    返回:
-        tuple: 包含以下内容的元组：
-            - np.ndarray: 解数组 u(x, t)。
-            - np.ndarray: 空间数组 x。
-            - np.ndarray: 时间数组 t。
-    
-    物理背景: 描述弦振动的波动方程，初始条件为弦静止，给定初始速度剖面。
-    数值方法: 使用有限差分法中的FTCS (Forward-Time Central-Space) 方案。
-    
-    实现步骤:
-    1. 从 parameters 字典中获取所有必要的物理和数值参数。
-    2. 初始化空间网格 x 和时间网格 t。
-    3. 创建一个零数组 u 来存储解，其维度为 (x.size, t.size)。
-    4. 计算稳定性条件 c = (a * dt / dx)^2。如果 c >= 1，打印警告信息。
-    5. 应用初始条件：u(x, 0) = 0。
-    6. 计算第一个时间步 u(x, 1) 的值，使用初始速度 u_t(x, 0) 和给定的公式。
-    7. 使用FTCS方案迭代计算后续时间步的解。
-    8. 返回解数组 u、空间数组 x 和时间数组 t。
     """
-    # TODO: 验证输入参数
-    # TODO: 初始化变量
-    # TODO: 计算稳定性条件
-    # TODO: 应用初始条件
-    # TODO: 实现FTCS主算法
-    # TODO: 返回结果
-    raise NotImplementedError(f"请在 {__file__} 中实现此函数")
+    # 1. 获取参数
+    a = parameters['a']
+    L = parameters['L']
+    d = parameters['d']
+    C = parameters['C']
+    sigma = parameters['sigma']
+    dx = parameters['dx']
+    dt = parameters['dt']
+    total_time = parameters['total_time']
 
+    # 2. 初始化空间和时间网格
+    x = np.arange(0, L + dx, dx)
+    t = np.arange(0, total_time + dt, dt)
+    Nx = x.size
+    Nt = t.size
+
+    # 3. 创建解数组
+    u = np.zeros((Nx, Nt))
+
+    # 4. 稳定性条件
+    c = (a * dt / dx) ** 2
+    if c >= 1:
+        print("警告：稳定性条件不满足，c = {:.3f} >= 1，结果可能不稳定！".format(c))
+
+    # 5. 初始条件
+    # u(x, 0) = 0 已经在初始化时设置
+    # u_t(x, 0) = psi(x)
+    psi = u_t(x, C, d, sigma, L)
+    # 6. 第一个时间步
+    # u(x, 1) = u(x, 0) + dt * psi(x) + 0.5 * c * (u(x+dx,0) - 2u(x,0) + u(x-dx,0))
+    u[1:-1, 1] = u[1:-1, 0] + dt * psi[1:-1] + 0.5 * c * (u[2:, 0] - 2 * u[1:-1, 0] + u[:-2, 0])
+    # 边界条件
+    u[0, 1] = 0
+    u[-1, 1] = 0
+
+    # 7. FTCS主算法
+    for n in range(1, Nt - 1):
+        u[1:-1, n + 1] = (2 * (1 - c) * u[1:-1, n] - u[1:-1, n - 1] +
+                          c * (u[2:, n] + u[:-2, n]))
+        # 边界条件
+        u[0, n + 1] = 0
+        u[-1, n + 1] = 0
+
+    return u, x, t
 
 if __name__ == "__main__":
     # Demonstration and testing
