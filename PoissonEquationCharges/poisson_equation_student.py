@@ -47,22 +47,24 @@ def solve_poisson_equation(M: int = 100, target: float = 1e-6, max_iterations: i
     h = 1.0
     
     # TODO: 初始化电势数组，形状为(M+1, M+1)
-    # 提示：使用 np.zeros() 创建数组
-    
+    phi = np.zeros((M+1, M+1), dtype=float)
+
     # TODO: 创建电荷密度数组
-    # 提示：同样使用 np.zeros() 创建
+    rho = np.zeros((M+1, M+1), dtype=float)
     
     # TODO: 设置电荷分布
-    # 正电荷：rho[60:80, 20:40] = 1.0
-    # 负电荷：rho[20:40, 60:80] = -1.0
+    scale = M / 100  # 尺寸缩放
+    rho[int(60*scale):int(80*scale), int(20*scale):int(40*scale)] = 1.0
+    rho[int(20*scale):int(40*scale), int(60*scale):int(80*scale)] = -1.0
     
     # TODO: 初始化迭代变量
-    # delta = 1.0  # 用于存储最大变化量
-    # iterations = 0  # 迭代计数器
-    # converged = False  # 收敛标志
+    delta = 1.0  # 用于存储最大变化量
+    iterations = 0  # 迭代计数器
+    converged = False  # 收敛标志
     
     # TODO: 创建前一步的电势数组副本
-    # 提示：使用 np.copy()
+    phi_prev = np.copy(phi)
+
     
     # TODO: 主迭代循环
     # while delta > target and iterations < max_iterations:
@@ -77,9 +79,26 @@ def solve_poisson_equation(M: int = 100, target: float = 1e-6, max_iterations: i
     
     # TODO: 检查是否收敛
     # converged = (delta <= target)
+    while delta > target and iterations < max_iterations:
+        # 使用有限差分公式更新内部网格点
+        phi[1:-1, 1:-1] = 0.25 * (
+            phi_prev[2:, 1:-1] + phi_prev[:-2, 1:-1] +
+            phi_prev[1:-1, 2:] + phi_prev[1:-1, :-2] +
+            h**2 * rho[1:-1, 1:-1]
+        )
+        
+        # 计算最大变化量
+        delta = np.max(np.abs(phi - phi_prev))
+        
+        # 更新前一步解
+        phi_prev = np.copy(phi)
+    
+        # 增加迭代计数
+        iterations += 1
     
     # TODO: 返回结果
-    raise NotImplementedError(f"请在 {__file__} 中实现此函数")
+    converged = bool(delta <= target)#  收敛标志
+    return phi, iterations, converged
 
 def visualize_solution(phi: np.ndarray, M: int = 100) -> None:
     """
@@ -95,24 +114,25 @@ def visualize_solution(phi: np.ndarray, M: int = 100) -> None:
         - 标注电荷位置
     """
     # TODO: 创建图形
-    # plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(10, 8))
     
     # TODO: 绘制电势分布
-    # 提示：使用 plt.imshow(phi, extent=[0, M, 0, M], origin='lower', cmap='RdBu_r')
+    plt.imshow(phi, extent=[0, M, 0, M], origin='lower', cmap='RdBu_r')
     
     # TODO: 添加颜色条
-    # 提示：plt.colorbar() 和 set_label()
+    plt.colorbar(label='Voltage (V)')
     
     # TODO: 标注电荷位置
-    # 可以使用 plt.fill_between() 或 plt.rectangle()
+    plt.gca().add_patch(plt.Rectangle((20, 60), 20, 20, fill=True, color='red', alpha=0.3, label='+1 C/m² Charge'))
+    plt.gca().add_patch(plt.Rectangle((60, 20), 20, 20, fill=True, color='blue', alpha=0.3, label='-1 C/m² Charge'))
     
     # TODO: 添加标题和标签
-    # plt.xlabel(), plt.ylabel(), plt.title()
+    plt.xlabel('x'), plt.ylabel('y'), plt.title('Potential Distribution of Charges')
     
     # TODO: 显示图形
-    # plt.show()
+    plt.show()
     
-    raise NotImplementedError(f"请在 {__file__} 中实现此函数")
+    
 
 def analyze_solution(phi: np.ndarray, iterations: int, converged: bool) -> None:
     """
@@ -127,16 +147,18 @@ def analyze_solution(phi: np.ndarray, iterations: int, converged: bool) -> None:
         打印解的基本统计信息，如最大值、最小值、迭代次数等
     """
     # TODO: 打印基本信息
-    # print(f"迭代次数: {iterations}")
-    # print(f"是否收敛: {converged}")
-    # print(f"最大电势: {np.max(phi):.6f} V")
-    # print(f"最小电势: {np.min(phi):.6f} V")
+    print(f"迭代次数: {iterations}")
+    print(f"是否收敛: {converged}")
+    print(f"最大电势: {np.max(phi):.6f} V")
+    print(f"最小电势: {np.min(phi):.6f} V")
     
     # TODO: 找到极值位置
     # 提示：使用 np.unravel_index() 和 np.argmax(), np.argmin()
+    max_pos = np.unravel_index(np.argmax(phi), phi.shape)
+    min_pos = np.unravel_index(np.argmin(phi), phi.shape)
+    print(f"最大电势位置: {max_pos}")
+    print(f"最小电势位置: {min_pos}")
     
-    raise NotImplementedError(f"请在 {__file__} 中实现此函数")
-
 if __name__ == "__main__":
     # 测试代码区域
     print("开始求解二维泊松方程...")
@@ -147,12 +169,11 @@ if __name__ == "__main__":
     max_iter = 10000
     
     # TODO: 调用求解函数
-    # phi, iterations, converged = solve_poisson_equation(M, target, max_iter)
+    phi, iterations, converged = solve_poisson_equation(M, target, max_iter)
     
     # TODO: 分析结果
-    # analyze_solution(phi, iterations, converged)
+    analyze_solution(phi, iterations, converged)
     
     # TODO: 可视化结果
-    # visualize_solution(phi, M)
+    visualize_solution(phi, M)
     
-    print("请实现上述函数以完成项目！")
