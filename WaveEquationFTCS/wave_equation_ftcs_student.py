@@ -9,57 +9,78 @@ from matplotlib.animation import FuncAnimation
 
 def u_t(x, C=1, d=0.1, sigma=0.3, L=1):
     """
-    计算初始速度剖面 psi(x)。
+    Calculates the initial velocity profile psi(x).
+    Args:
+        x (np.ndarray): Position array.
+        C (float): Amplitude constant.
+        d (float): Offset for the exponential term.
+        sigma (float): Width of the exponential term.
+        L (float): Length of the string.
+    Returns:
+        np.ndarray: Initial velocity profile.
     """
-    # 高斯型初始速度分布，中心在d，宽度为sigma
-    return C * np.exp(-((x - d * L) ** 2) / (2 * sigma ** 2))
+    return C * x * (L - x) / L / L * np.exp(-(x - d)**2 / (2 * sigma**2))
 
 def solve_wave_equation_ftcs(parameters):
     """
-    使用FTCS有限差分法求解一维波动方程。
-    """
-    # 1. 获取参数
-    a = parameters['a']
-    L = parameters['L']
-    d = parameters['d']
-    C = parameters['C']
-    sigma = parameters['sigma']
-    dx = parameters['dx']
-    dt = parameters['dt']
-    total_time = parameters['total_time']
+    Solves the 1D wave equation using the FTCS finite difference method.
 
-    # 2. 初始化空间和时间网格
+    Args:
+        parameters (dict): A dictionary containing the following parameters:
+            - 'a': Wave speed (m/s).
+            - 'L': Length of the string (m).
+            - 'd': Offset for the initial velocity profile (m).
+            - 'C': Amplitude constant for the initial velocity profile (m/s).
+            - 'sigma': Width of the initial velocity profile (m).
+            - 'dx': Spatial step size (m).
+            - 'dt': Time step size (s).
+            - 'total_time': Total simulation time (s).
+
+    Returns:
+        tuple: A tuple containing:
+            - np.ndarray: The solution array u(x, t).
+            - np.ndarray: The spatial array x.
+            - np.ndarray: The time array t.
+    """
+    a = parameters.get('a', 100)
+    L = parameters.get('L', 1)
+    d = parameters.get('d', 0.1)
+    C = parameters.get('C', 1)
+    sigma = parameters.get('sigma', 0.3)
+    dx = parameters.get('dx', 0.01)
+    dt = parameters.get('dt', 5e-5)
+    total_time = parameters.get('total_time', 0.1)
+
     x = np.arange(0, L + dx, dx)
     t = np.arange(0, total_time + dt, dt)
-    Nx = x.size
-    Nt = t.size
+    u = np.zeros((x.size, t.size), float)
 
-    # 3. 创建解数组
-    u = np.zeros((Nx, Nt))
+    # Stability condition check (c < 1)
+    c_val = (a * dt / dx)**2
+    if c_val >= 1:
+        print(f"Warning: Stability condition c = {c_val} >= 1. Solution may be unstable.")
 
-    # 4. 稳定性条件
-    c = (a * dt / dx) ** 2
-    if c >= 1:
-        print("警告：稳定性条件不满足，c = {:.3f} >= 1，结果可能不稳定！".format(c))
+    # Initial conditions: u(x, 0) = 0 (string at rest)
+    # u(x, 1) calculation using initial velocity u_t(x, 0)
+    # u_i,1 = c/2 * (u_i+1,0 + u_i-1,0) + (1-c) * u_i,0 + u_t(x,0) * dt
+    # Since u_i,0 = 0, this simplifies to:
+    # u_i,1 = u_t(x,0) * dt
+    # The provided formula in the markdown is:
+    # u_i,1 = c/2 * (u_i+1,0 + u_i-1,0) + (1-c) * u_i,0 + u_t(x,0) * dt
+    # This formula is for a general case where u_i,0 might not be zero.
+    # Given u(x,0) = 0, the terms with u_i,0 become zero.
+    # So, u[1:-1, 1] = u_t(x[1:-1]) * dt should be sufficient if u_i,0 is strictly 0.
+    # However, the provided markdown code uses:
+    # u[1:-1,1] = c/2*(u[2:,0]+u[:-2,0])+(1-c)*u[1:-1,0]+u_t(x[1:-1])*dt
+    # Let's stick to the provided code's implementation for u[1:-1,1] for consistency.
+    # Note: u[2:,0], u[:-2,0], u[1:-1,0] are all zeros due to np.zeros initialization.
+    # So, u[1:-1,1] effectively becomes u_t(x[1:-1]) * dt.
+    u[1:-1, 1] = u_t(x[1:-1], C, d, sigma, L) * dt
 
-    # 5. 初始条件
-    # u(x, 0) = 0 已经在初始化时设置
-    # u_t(x, 0) = psi(x)
-    psi = u_t(x, C, d, sigma, L)
-    # 6. 第一个时间步
-    # u(x, 1) = u(x, 0) + dt * psi(x) + 0.5 * c * (u(x+dx,0) - 2u(x,0) + u(x-dx,0))
-    u[1:-1, 1] = u[1:-1, 0] + dt * psi[1:-1] + 0.5 * c * (u[2:, 0] - 2 * u[1:-1, 0] + u[:-2, 0])
-    # 边界条件
-    u[0, 1] = 0
-    u[-1, 1] = 0
-
-    # 7. FTCS主算法
-    for n in range(1, Nt - 1):
-        u[1:-1, n + 1] = (2 * (1 - c) * u[1:-1, n] - u[1:-1, n - 1] +
-                          c * (u[2:, n] + u[:-2, n]))
-        # 边界条件
-        u[0, n + 1] = 0
-        u[-1, n + 1] = 0
+    # FTCS scheme for subsequent time steps
+    # u_i,j+1 = c * (u_i+1,j + u_i-1,j) + 2 * (1-c) * u_i,j - u_i,j-1
+    for j in range(1, t.size - 1):
+        u[1:-1, j + 1] = c_val * (u[2:, j] + u[:-2, j]) + 2 * (1 - c_val) * u[1:-1, j] - u[1:-1, j - 1]
 
     return u, x, t
 
